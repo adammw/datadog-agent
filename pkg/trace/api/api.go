@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	fmtlog "log"
 	"net"
 	"net/http"
 	"sort"
@@ -140,6 +141,7 @@ func (r *HTTPReceiver) Listen(addr, logExtra string) error {
 	r.server = &http.Server{
 		ReadTimeout:  timeout,
 		WriteTimeout: timeout,
+		ErrorLog:     fmtlog.New(logWriter(log.Error), "http.Server: ", 0),
 	}
 	log.Infof("listening for traces at http://%s%s", addr, logExtra)
 
@@ -441,4 +443,12 @@ func tracesFromSpans(spans []pb.Span) pb.Traces {
 	}
 
 	return traces
+}
+
+// logWriter is an error logging function which can be written to.
+type logWriter func(v ...interface{}) error
+
+// Write implements io.Writer
+func (lw logWriter) Write(p []byte) (n int, err error) {
+	return len(p), lw(string(p))
 }
