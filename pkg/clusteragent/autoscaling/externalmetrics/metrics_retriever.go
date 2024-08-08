@@ -127,11 +127,17 @@ func (mr *MetricsRetriever) retrieveMetricsValuesSlice(datadogMetrics []model.Da
 			log.Errorf("Unable to fetch external metrics: %v", err)
 		}
 
+		// Check for partial failure
+		if err != nil {
+			log.Errorf("Partial failure fetching external metrics: %v", err)
+		}
+
 		resultsByTimeWindow[timeWindow] = results
 	}
 
 	// Update store with current results
 	currentTime := time.Now().UTC()
+	metricNotFoundErrors := 0
 	for _, datadogMetric := range datadogMetrics {
 		datadogMetricFromStore := mr.store.LockRead(datadogMetric.ID, false)
 		if datadogMetricFromStore == nil {
@@ -190,11 +196,17 @@ func (mr *MetricsRetriever) retrieveMetricsValuesSlice(datadogMetrics []model.Da
 				// This should never happen as `QueryExternalMetric` is filling all missing series
 				// if no global error.
 				datadogMetricFromStore.Error = log.Errorf(invalidMetricNotFoundErrorMessage, query)
+				metricNotFoundErrors++
 			}
 		}
 		datadogMetricFromStore.UpdateTime = currentTime
 
 		mr.store.UnlockSet(datadogMetric.ID, *datadogMetricFromStore, metricRetrieverStoreID)
+	}
+
+	// for debugging
+	if metricNotFoundErrors > 2 {
+		log.Warnf("Too many metrics not found in the results: %+v", resultsByTimeWindow)
 	}
 }
 
